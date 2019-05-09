@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include <stddef.h>
 #include <string.h>
+#include <math.h>
+#include <limits.h>
 
 #include "janssonpath.h"
 #include "parse.h"
@@ -10,7 +12,11 @@
 #define FALSE 0
 
 #define NEW(type) ((type *)malloc(sizeof(type)))
-#define DELETE(obj) free(obj)
+#define NEW_ARRAY(type, number) ((type *)malloc(sizeof(type)*(number)))
+#define DELETE(obj) free((void*)obj)
+#define DELETE_ARRAY(obj) free((void*)obj)
+
+#define debug_out(json) do{char * s= json_dumps(json,JSON_INDENT(2)|JSON_ENCODE_ANY);if(s){puts(s);free(s);}else puts("Empty");}while(0)
 
 // all static functions here are internal implement. they follow the convention
 // below: no check of arguments - pname/path must not be NULL; no accepting root
@@ -28,6 +34,22 @@ static json_t *json_path_get_all_properties(json_t *json) {
     return ret;
   }
   else return NULL;
+}
+
+static path_result json_path_get_all_properties_col(path_result json){
+  path_result result={NULL,TRUE};
+  size_t index; json_t *iter;
+  if(json.is_collection){
+    result.result=json_array();
+    json_array_foreach(json.result, index, iter){
+      json_t * property=json_path_get_all_properties(iter);
+      json_array_extend(result.result,property);
+      json_decref(property);
+    }
+  }else{
+    result.result=json_path_get_all_properties(json.result);
+  }
+  return result;
 }
 
 //remember to clean up stuffs before fail()
@@ -54,7 +76,7 @@ typedef enum comparation_operator{
 }comparation_operator;
 
 typedef struct sub_path{//sub_path does not own the string
-  const char* start;
+  const char* begin;
   const char* end;
 }sub_path;
 
@@ -84,21 +106,22 @@ typedef struct logic_exp{
 //   return NULL;
 // }
 
-static void remove_out_most_bar(const char ** start, const char** end){
-  while((*start)[0]=='('&&(*end)[-1]==')'){
-    (*start)++;(*end)--;
-  }
-}
+#define remove_out_most_bar(begin, end) do{\
+  while(begin[0]=='('&&end[-1]==')'&&\
+    (jassonpath_next_matched_bracket(begin,end,'(',')')==(end-1))){\
+    begin++;end--;\
+  }\
+}while(0)
 
-static comparation* compile_compare(const char * start, const char* end){
-  remove_out_most_bar(&start,&end);
+static comparation* compile_compare(const char * begin, const char* end){
   comparation* result=NULL;
-  const char* comparation_first=jassonpath_next_punctors_outside_para(start,end,"=<>!");
+  remove_out_most_bar(begin,end);
+  const char* comparation_first=jassonpath_next_punctors_outside_para(begin,end,"=<>!");
   result=NEW(comparation);
   if(comparation_first==end||!comparation_first[0]){
     result->operator=comparation_nocmp;
-    result->oprand[0].start=start;
-    result->oprand[0].start=end;
+    result->oprand[0].begin=begin;
+    result->oprand[0].end=end;
     return result;
   }
   int len;
@@ -131,34 +154,33 @@ static comparation* compile_compare(const char * start, const char* end){
     fail();
   }
 
-  const char * lhss=start,
+  const char * lhss=begin,
     *lhse=comparation_first,
     *rhss=comparation_first+len,
     *rhse=end;
-  remove_out_most_bar(&lhss,&lhse);
-  remove_out_most_bar(&rhss,&rhse);
-  result->oprand[0].start=lhss;result->oprand[0].end=lhse;
-  result->oprand[1].start=rhss;result->oprand[1].end=rhse;
+  remove_out_most_bar(lhss,lhse);
+  remove_out_most_bar(rhss,rhse);
+  result->oprand[0].begin=lhss;result->oprand[0].end=lhse;
+  result->oprand[1].begin=rhss;result->oprand[1].end=rhse;
   return result;
 }
 
-static expression compile_expression(const char * start, const char* end){
-  remove_out_most_bar(&start,&end);
+static expression compile_expression(const char * begin, const char* end){
   expression result={{NULL},exp_error};
-
-  const char* logic_first=jassonpath_next_punctors_outside_para(start,end,"|&");
+  remove_out_most_bar(begin,end);
+  const char* logic_first=jassonpath_next_punctors_outside_para(begin,end,"|&");
   //no binary logic operator found
   if(logic_first==end||!*logic_first){
     //negative
-    if(start[0]=='!'){
+    if(begin[0]=='!'){
       result.tag=exp_logic;
       result.logic=NEW(logic_exp);
       result.logic->operator=logic_negtive;
-      result.logic->oprand[0]=compile_expression(start+1,end);
+      result.logic->oprand[0]=compile_expression(begin+1,end);
+    }else{//comparation
+      result.tag=exp_compare;
+      result.comp=compile_compare(begin,end);
     }
-    //comparation
-    result.tag=exp_compare;
-    result.comp=compile_compare(start,end);
     return result;
   }
   //logic operator found
@@ -166,7 +188,7 @@ static expression compile_expression(const char * start, const char* end){
   result.tag=exp_logic;
   result.logic=NEW(logic_exp);
   result.logic->operator = logic_first[0]=='&'?logic_and:logic_or;
-  result.logic->oprand[0]=compile_expression(start,logic_first);
+  result.logic->oprand[0]=compile_expression(begin,logic_first);
   result.logic->oprand[1]=compile_expression(logic_first+2,end);
   return result;
 }
@@ -189,24 +211,16 @@ static void expression_free(expression exp){
 }
 
 // for this end should not be NULL
-static path_result json_path_get_property(json_t * root, json_t *json, const char *name, const char *end) {
+static path_result json_path_get_property(json_t *json, const char *name, const char *end) {
   path_result result={NULL,FALSE};
   if (name[0] == '*') { // select all members
     result.is_collection=TRUE;
-    if(name[1]){
+    if(name[1]&&name+1!=end){
       result.result=json_array();
       fail();
     }
     result.result = json_path_get_all_properties(json);
     return result;
-  }
-
-  if(name[0]=='('){
-    const char* right=jassonpath_next_matched_bracket(name,end,'(',')');
-    if(right!=end-1)fail();
-    expression exp=compile_expression(name,end);
-    
-    expression_free(exp);
   }
   
   // number or named property
@@ -245,10 +259,10 @@ static path_result json_path_get_property(json_t * root, json_t *json, const cha
     result.is_collection=TRUE;
     result.result=json_array();
     if(!json_is_array(json)) fail();//incorrect input
-    long step=1;size_t start=0;size_t end=json_array_size(json);
+    long step=1;size_t begin=0;size_t end=json_array_size(json);
     int rev=(segn==2&&seg_filled[0]&&!seg_filled[1]&&seg_int[0]<0);
     if(!rev){
-      if(seg_filled[0]&&seg_int[0]>=0)start=seg_int[0];
+      if(seg_filled[0]&&seg_int[0]>=0)begin=seg_int[0];
       if(segn==2&&seg_filled[1]&&((size_t)seg_int[1])<end)end=seg_int[1];
       else if(segn==3&&seg_filled[2]&&((size_t)seg_int[2])<end)end=seg_int[2];
       if(segn==3&&seg_filled[1]&&seg_filled[1]!=0)step=seg_int[1];
@@ -256,11 +270,11 @@ static path_result json_path_get_property(json_t * root, json_t *json, const cha
       //because we do not arrange output with order
       if(step<0)step=-step;
     }else{
-      long start_=end+seg_int[0];//start=end-i
-      if(start_>=0)start=start_;
+      long begin_=end+seg_int[0];//begin=end-i
+      if(begin_>=0)begin=begin_;
     }
     size_t i;
-    for(i=start;i<end;i+=step){
+    for(i=begin;i<end;i+=step){
       json_t * ele=json_array_get(json,i);
       json_array_append_new(result.result,ele);
     } 
@@ -268,17 +282,260 @@ static path_result json_path_get_property(json_t * root, json_t *json, const cha
   return result;
 }
 
+static json_t* json_index_json(json_t* json, const json_t* index){
+  json_t* sel;
+  size_t i=0;
+  int named=FALSE;
+  if(json_is_integer(index)){
+    i=json_integer_value(index);
+  }else if(json_is_true(index)){
+    i=1;
+  }else if(json_is_false(index)||json_is_null(index)){
+    i=0;
+  }else if(json_is_string(index)){
+    named=TRUE;
+  }
+  if(named)sel=json_object_get(json,json_string_value(index));
+  else sel=json_array_get(json,i);
+  return sel;
+}
+
+static int json_to_bool(json_t* json){
+  return json_is_true(json) || 
+          (json_is_integer(json)&&json_integer_value(json))||
+          (json_is_string(json)&&!strcmp("true",json_string_value(json)));
+}
+
+static const char* unescape(const char* begin, const char*end){
+  char* ret=NEW_ARRAY(char,end-begin+1);
+  memcpy(ret,begin,end-begin);
+  ret[end-begin]='\0';
+  return ret;
+}
+
+static json_t * json_object_from_string(const char* begin, const char*end){
+  json_t *result=NULL;
+  if(begin[0]=='\"'&&end[-1]=='\"'&&(end-begin)>1){
+    const char* value_str=unescape(begin+1,end-1);
+    result = json_string(value_str);
+    DELETE_ARRAY(value_str);
+  }else if(isdigit(begin[0])||begin[0]=='-'){
+    char * end_of_number;
+    long ret = strtol(begin,&end_of_number,10);
+    if(end==end_of_number||!*end_of_number) result = json_integer(ret);
+    else {
+      double retd=strtod(begin,&end_of_number);
+      if(end==end_of_number||!*end_of_number) result = json_real(retd);
+    }
+  }else{
+    const char*str=jassonpath_strdup_no_terminal(begin,end);
+    if(!strcmp("true",str))result=json_true();
+    else if(!strcmp("false",str))result=json_false();
+    else if(!strcmp("null",str))result=json_null();
+    DELETE_ARRAY(str);
+  }
+  return result;
+}
+
+static path_result json_path_get_impl(json_t *root, path_result curr, const char *path,
+                                  const char *end);
+
+static json_t * json_path_eval(json_t *root,json_t *curr,const char* begin, const char*end){
+  if(begin[0]!='$'&&begin[0]!='@'&&begin[0]!='.'){
+    return json_object_from_string(begin,end);
+  };
+  //sub path
+  path_result curr_p={curr,FALSE};
+  path_result root_p={root,FALSE};
+  if(begin[0]=='#'){
+    json_t * arr=json_path_eval(root,curr,begin+1,end);
+    size_t len;
+    if(json_is_array(arr)) len=json_array_size(arr);
+    else len=0;
+    json_decref(arr);
+    return json_integer(len);
+  }
+  if(begin[0]=='@')return json_path_get_impl(root,curr_p,begin+1,end).result;
+  else if(begin[0]=='$')return json_path_get_impl(root,root_p,begin+1,end).result;
+  else return json_path_get_impl(root,curr_p,begin,end).result;//default to current node
+}
+
+static double json_to_double(const json_t *json){
+  if(json_is_real(json))return json_real_value(json);
+  else if(json_is_string(json)){
+    const char * begin=json_string_value(json);char * end;
+    double value=strtod(begin,&end);
+    if(end==begin+json_string_length(json))return value;
+    else return NAN;
+  }else if(json_is_integer(json)){
+    return json_integer_value(json);
+  }else if(json_is_boolean(json)){
+    return json_boolean_value(json)?1.0:0.0;
+  }else if(json_is_null(json)){
+    return 0.0;
+  }
+  //else if(json_is_object(json)||json_is_array(json))
+  return NAN;
+}
+
+static long long json_to_int(const json_t *json){
+  static const long long error=(long long)(INT_MAX)+1;
+  if(json_is_real(json))return json_real_value(json);
+  else if(json_is_string(json)){
+    const char * begin=json_string_value(json);char * end;
+    long value=strtol(begin,&end,10);
+    if(end==begin+json_string_length(json))return value;
+    else return error;
+  }else if(json_is_integer(json)){
+    return json_integer_value(json);
+  }else if(json_is_boolean(json)){
+    return json_boolean_value(json)?1:0;
+  }else if(json_is_null(json)){
+    return 0;
+  }
+  //else if(json_is_object(json)||json_is_array(json))
+  return error;
+}
+
+int comp_diff(double diff,comparation_operator op){
+  int result;
+  if(!diff)result= (op==comparation_eq)||(op==comparation_ge)||(op==comparation_le);
+  else if(diff>0.0)result= (op==comparation_ne)||(op==comparation_gt);
+  else result= (op==comparation_ne)||(op==comparation_lt);
+  return result;
+}
+
+static json_t * json_compare(comparation_operator op, json_t *lhs,json_t *rhs){
+  if(op==comparation_nocmp||op==comparation_error||op==comparation_reg) return NULL;//should not happen
+  if(!lhs||!rhs) return json_false();
+  if(json_is_array(lhs)||json_is_array(rhs)||json_is_object(lhs)||json_is_object(rhs)) return json_false();
+  
+  if(json_is_null(lhs)||json_is_null(rhs)){//null should not be equal to anything other than null
+    if(op!=comparation_eq&&op!=comparation_ne)return json_false();
+    return json_boolean( (json_is_null(lhs)&&json_is_null(rhs)) == (op==comparation_eq));
+  }
+  //conversion: string->boolean->integer->number string->integer->number
+  //however "true" should not be treat as 1
+  if(json_is_number(lhs)||json_is_number(rhs)||op!=comparation_eq||op!=comparation_ne){//numeric compare
+    if(json_is_real(lhs)||json_is_real(rhs)){
+      double lhs_d=json_to_double(lhs);double rhs_d=json_to_double(rhs);
+      if(isnan(lhs_d)||isnan(rhs_d))return json_false();
+      return json_boolean(comp_diff(lhs_d-rhs_d,op));
+    }else{
+      long lhs_d=json_to_int(lhs);long rhs_d=json_to_int(rhs);
+      if(lhs_d>INT_MAX||rhs_d>INT_MAX)return json_false();
+      return json_boolean(comp_diff(lhs_d-rhs_d,op));
+    }
+  }else if(json_is_boolean(lhs)||json_is_boolean(rhs)){
+    int lhs_b=json_to_bool(lhs);int rhs_b=json_to_bool(rhs);
+    lhs_b=lhs_b?1:0;rhs_b=rhs_b?1:0;//normalization
+    return json_boolean( (lhs_b==rhs_b) == (op==comparation_eq) );
+  }else if(json_is_string(lhs)&&json_is_string(rhs)){// string compare
+    int a=strcmp(json_string_value(lhs),json_string_value(rhs));
+    return json_boolean(a==(op==comparation_ne));
+  }
+  return json_true();
+}
+
+static json_t *execute_compare(comparation *comp,json_t*root,json_t*curr){
+  json_t *result =NULL;
+  switch (comp->operator){
+    case comparation_nocmp:
+      result = json_path_eval(root,curr,comp->oprand[0].begin, comp->oprand[0].end);
+      break;
+    case comparation_eq:case comparation_ne:
+    case comparation_gt:case comparation_ge:
+    case comparation_lt:case comparation_le:{
+      json_t * lhs =
+        json_path_eval(root,curr,comp->oprand[0].begin, comp->oprand[0].end);
+      json_t* rhs=
+        json_path_eval(root,curr,comp->oprand[1].begin, comp->oprand[1].end);
+      result = json_compare(comp->operator,lhs,rhs);
+      json_decref(lhs);json_decref(rhs);
+    }
+    break;
+    case comparation_reg://yet not supported
+    case comparation_error:default:
+      result = NULL;
+  }
+  return result;
+}
+
+static json_t *execute_exp(expression exp,json_t*root,json_t*curr){
+  if(exp.tag==exp_logic){
+    logic_exp* logic=exp.logic;
+    if(logic->operator==logic_positive||logic->operator==logic_negtive){
+      json_t * ret=execute_exp(logic->oprand[0],root,curr);
+      int b=json_to_bool(ret);
+      json_decref(ret);
+      if(logic->operator==logic_negtive) b=!b;
+      return json_boolean(b);
+    }else if(logic->operator==logic_and||logic->operator==logic_or){
+      json_t * ret1=execute_exp(logic->oprand[0],root,curr),
+        *ret2=execute_exp(logic->oprand[1],root,curr);
+      int b1=json_to_bool(ret1),b2=json_to_bool(ret2);
+      json_decref(ret1);json_decref(ret2);
+      int r;
+      if(logic->operator==logic_and) r=b1&&b2;
+      else r=b1||b2;
+      return json_boolean(r);
+    }
+  }
+  else if(exp.tag==exp_compare){
+    return execute_compare(exp.comp,root,curr);
+  }
+  return NULL;
+}
+
 static path_result json_path_get_property_col(json_t *root, path_result curr,
                                           const char *name, const char *end
                                           ) {
   path_result result={NULL,FALSE};
+  size_t index;json_t *iter;
+  int cond  = (name[0]=='?');
+  if(name[0]=='('||(cond&&name[1]=='(')){//expression [?(..)] [(..)]
+    if(cond) name++;
+    const char* right=jassonpath_next_matched_bracket(name,end,'(',')');
+    if(right!=end-1)fail();
+    expression exp=compile_expression(name, end);
+
+    if(exp.tag==exp_error) fail();
+
+    if(cond){
+      json_t* properties=json_path_get_all_properties_col(curr).result;//unify properties into array
+
+      result.result=json_array();result.is_collection=TRUE;
+      json_array_foreach(properties, index, iter){
+        json_t* exc_result=execute_exp(exp,root,iter);
+        if(json_to_bool(exc_result)) json_array_append(result.result,iter);
+        json_decref(exc_result);
+      }
+      json_decref(properties);
+    }else{
+      if(curr.is_collection){
+        result.result=json_array();result.is_collection=TRUE;
+        json_array_foreach(curr.result, index, iter){
+          json_t* exc_result=execute_exp(exp,root,iter);
+          json_t* sel = json_index_json(iter,exc_result);
+          json_array_append(result.result,sel);
+          json_decref(sel);json_decref(exc_result);
+        }
+      }else{
+          json_t* exc_result=execute_exp(exp,root,curr.result);
+          result.result = json_index_json(curr.result,exc_result);
+          result.is_collection=FALSE;
+          json_decref(exc_result);
+      }
+    }
+    
+    expression_free(exp);
+    return result;
+  }
 
   if (curr.is_collection) {
     result.result = json_array();
-    size_t index;
-    json_t *iter;
     json_array_foreach(curr.result, index, iter) {
-      path_result r = json_path_get_property(root, iter, name, end);
+      path_result r = json_path_get_property(iter, name, end);
       if (r.is_collection)
         json_array_extend(result.result, r.result);
       else
@@ -287,7 +544,7 @@ static path_result json_path_get_property_col(json_t *root, path_result curr,
     }
     result.is_collection=TRUE;
   } else {
-    result = json_path_get_property(root, curr.result, name, end);
+    result = json_path_get_property(curr.result, name, end);
   }
   return result;
 }
@@ -322,13 +579,19 @@ static path_result json_path_get_impl(json_t *root, path_result curr, const char
     pname_end = jassonpath_next_delima(pname, end);
     path = pname_end;
   }
+
+  const char * name_begin,*name_end;
   // if it's string, deal with the string problems
-  // todo: unexcape. especially for filters like ["?(@.\"a\")"] kind of things
   if (*pname == '\"') {
     if (pname_end == pname || pname_end[-1] != '\"')
       fail();
     pname++;
     pname_end--;
+    name_begin=unescape(pname,pname_end);
+    name_end=name_begin+(pname_end-pname);
+  }else{
+    name_begin=jassonpath_strdup_no_terminal(pname,pname_end);
+    name_end=name_begin+(pname_end-pname);
   }
 
   if (recursive) {
@@ -336,25 +599,25 @@ static path_result json_path_get_impl(json_t *root, path_result curr, const char
     path_result new_result = {json_array(),TRUE};
     result=new_result;
 
-    json_incref(curr.result);
-    path_result out_layer = curr;
+    path_result out_layer = {json_array(),TRUE};
+    json_array_append(out_layer.result,curr.result);
 
-    static const char all[]="*";
     while (out_layer.result &&
            !(json_is_array(out_layer.result) && !json_array_size(out_layer.result))) {
-      path_result cur_layer = json_path_get_property_col(root, out_layer, all, all+1);
+      path_result cur_layer = json_path_get_all_properties_col(out_layer);
       json_decref(out_layer.result);
       path_result selected =
-          json_path_get_property_col(root,cur_layer, pname, pname_end);
+          json_path_get_property_col(root,cur_layer, name_begin, name_end);
       json_array_extend(result.result, selected.result);
       json_decref(selected.result);
       out_layer = cur_layer;
     }
+
     json_decref(out_layer.result);
   } else {
-    result = json_path_get_property_col(root, curr, pname, pname_end);
+    result = json_path_get_property_col(root, curr, name_begin, name_end);
   }
-
+  DELETE_ARRAY(name_begin);
   path_result ret = json_path_get_impl(root, result, path, end);
   json_decref(result.result);
   return ret;
