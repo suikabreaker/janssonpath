@@ -300,7 +300,6 @@ static path_result json_path_get_property(json_t *curr, const char *begin, const
       len = json_array_size(curr);
     else
       len = 0;
-    json_decref(curr);
     result.result = json_integer(len);
     result.is_collection = FALSE;
     return result;
@@ -714,8 +713,10 @@ static path_result json_path_get_property_col(json_t *root, path_result curr,
                        (json_is_string(exc_result) && json_string_length(exc_result)); //special case for path like "$.store.book[?(@.isbn)]"
         if (selected)
           json_array_append(result.result, iter);
+        debug_out(exc_result);
         json_decref(exc_result);
       }
+      debug_out(properties);
       json_decref(properties);
     }
     else
