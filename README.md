@@ -17,7 +17,7 @@ User is responsible for json_decref-ing the returned json node.
 
 ## Grammar
 
-Use `"` to enclosing strings.
+Use `"` to enclosing strings. Space characters not allowed except in string literal.
 
 ### Path
 
