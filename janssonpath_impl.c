@@ -308,24 +308,34 @@ static path_result json_path_get_property(json_t *curr, const char *begin, const
   // number or named property
   const char *seg[4];
   seg[0] = begin;
-  size_t segn; //number of parameters seprated by ':'
-  for (segn = 1; segn < 4; segn++)
+  size_t segn = 1; //number of parameters seprated by ':'
+  printf("%p:%p\n", begin, end);
+  while (segn < 4 && seg[segn - 1] != end && seg[segn - 1][0])
   {
     seg[segn] = jassonpath_next_seprator(seg[segn - 1], end, ':');
-    if (seg[segn] == end || !seg[segn][0])
+    if (seg[segn] == end || !*seg[segn]) //not found
       break;
-    seg[segn]++;
+    else
+    {
+      seg[segn]++;
+      segn++;
+    }
   }
   seg[segn] = end;
   long seg_int[3];
   int seg_filled[3]; //is it a number and been filled?
   {                  //make a scope to isolate i. workaround for poor supported inline declaration in for
     size_t i;
-    for (i = 0; i < segn && (seg[i] != end && seg[i][0]); i++)
+    for (i = 0; i < segn; i++)
     {
       char *end_of_int;
-      seg_int[i] = strtol(seg[i], &end_of_int, 10);
-      seg_filled[i] = (end_of_int != seg[i]);
+      if ((seg[i] != end && seg[i][0]))
+      {
+        seg_int[i] = strtol(seg[i], &end_of_int, 10);
+        seg_filled[i] = (end_of_int != seg[i]);
+      }
+      else
+        seg_filled[i] = FALSE;
       //if(seg_filled[i]&&end_of_int!=seg[i+1]) ; error, but we ignore that
     }
   }
