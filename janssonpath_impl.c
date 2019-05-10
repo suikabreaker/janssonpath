@@ -299,6 +299,8 @@ static path_result json_path_get_property(json_t *curr, const char *begin, const
     path_result out_layer = {json_array(), TRUE};
     json_array_append(out_layer.result, curr);
 
+    json_array_append(result.result, curr); // including itself
+
     while (out_layer.result &&
            !(json_is_array(out_layer.result) && !json_array_size(out_layer.result)))
     {
