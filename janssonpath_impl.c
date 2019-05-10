@@ -555,9 +555,9 @@ int comp_diff(double diff, comparison_operator op)
   if (!diff)
     result = (op == comparison_eq) || (op == comparison_ge) || (op == comparison_le);
   else if (diff > 0.0)
-    result = (op == comparison_ne) || (op == comparison_gt);
+    result = (op == comparison_ne) || (op == comparison_gt) || (op == comparison_ge);
   else
-    result = (op == comparison_ne) || (op == comparison_lt);
+    result = (op == comparison_ne) || (op == comparison_lt) || (op == comparison_le);
   return result;
 }
 
