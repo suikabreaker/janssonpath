@@ -713,10 +713,8 @@ static path_result json_path_get_property_col(json_t *root, path_result curr,
                        (json_is_string(exc_result) && json_string_length(exc_result)); //special case for path like "$.store.book[?(@.isbn)]"
         if (selected)
           json_array_append(result.result, iter);
-        debug_out(exc_result);
         json_decref(exc_result);
       }
-      debug_out(properties);
       json_decref(properties);
     }
     else
