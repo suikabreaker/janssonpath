@@ -33,6 +33,7 @@ Use `"` to enclosing strings. Space characters not allowed except in string lite
 | `[n]`                    |                              Selects the *n*-th element from an array. Indexes are 0-based. Note that objects will always return empty lists for this.                              |
 | `..property`             |                 Recursive descent: Searches for the specified property name recursively and returns an array of all values with this property name. Returns a list.                 |
 | `*`                      |                                                Selects all elements in an object or an array, regardless of their names or indexes.                                                 |
+| `#`                      |                                                      Length of the array.                                                       |
 | `[start:end]` `[start:]` | Selects array elements from the start index and up to, but not including, end index. If end is omitted, selects all elements from start until the end of the array. Returns a list. |
 | `[:n]`                   |                                                            Selects the first *n* elements of the array. Returns a list.                                                             |
 | `[-n:]`                  |                                                             Selects the last *n* elements of the array. Returns a list.                                                             |
