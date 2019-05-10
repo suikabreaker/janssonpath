@@ -16,7 +16,7 @@ const char* jassonpath_match_string(const char* begin,const char* end){
 const char *jassonpath_next_delima(const char *begin, const char *end) {
   for (;begin != end && *begin;begin++){
     if(begin[0]=='\"') begin = jassonpath_match_string(begin,end);
-    else if(begin[0]=='['||begin[0]==']'||begin[0]=='.')break;
+    if(begin[0]=='['||begin[0]==']'||begin[0]=='.')break;
   }
   return begin;
 }
@@ -27,7 +27,7 @@ const char* jassonpath_next_matched_bracket(const char* begin,const char* end, c
   int count=1;
   for(;begin!=end&&*begin;begin++){
     if(begin[0]=='\"') begin=jassonpath_match_string(begin,end);
-    else if(begin[0]==left) count++;
+    if(begin[0]==left) count++;
     else if(begin[0]==right)count--;
     if(!count) break;
   }
@@ -37,7 +37,7 @@ const char* jassonpath_next_matched_bracket(const char* begin,const char* end, c
 const char *jassonpath_next_seprator(const char *begin, const char *end, char sep) {
   for (;begin != end && *begin;begin++){
     if(begin[0]=='\"') begin = jassonpath_match_string(begin,end);
-    else if(begin[0]==sep)break;
+    if(begin[0]==sep)break;
   }
   return begin;
 }
