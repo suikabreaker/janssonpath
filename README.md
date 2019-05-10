@@ -9,7 +9,7 @@ Include janssonpath.h, and link with janssonpath.o and jansson in your project t
 
 ## Usage
 
-json_t * json_path_get(json_t *json, const char *path);
+`json_t * json_path_get(json_t *json, const char *path);`
 
 json_path_get returns the result possiblely with reference to the json and its descendant nodes.
 
@@ -66,4 +66,3 @@ Logical operators have the higher priority than comparisons and results can be u
 Comparisons only take paths and constants as oprand.
 
 Brackets `(` `)` can be used.
-

@@ -1,6 +1,12 @@
-DBG_FLG = -Wall -Wextra -pedantic -g3 -Og -D_DEBUG -fsanitize=address -fno-omit-frame-pointer
+DBG_FLG = -Wall -Wextra -pedantic
+
+ifdef debug
+DBG_FLG += -g3 -Og -D_DEBUG -fsanitize=address -fno-omit-frame-pointer
+LDFLAGS += -lasan
+endif
+
 CFLAGS = -std=c11 $(DBG_FLG)
-LDFLAGS = -lasan
+
 
 all: janssonpath.o
 
