@@ -304,12 +304,9 @@ static path_result json_path_get_property(json_t *curr, const char *begin, const
     while (out_layer.result &&
            !(json_is_array(out_layer.result) && !json_array_size(out_layer.result)))
     {
-      debug_out(out_layer.result);
       path_result cur_layer = json_path_get_all_properties_col(out_layer);
-      debug_out(cur_layer.result);
       json_decref(out_layer.result);
       json_array_extend(result.result, cur_layer.result);
-      debug_out(result.result);
       out_layer = cur_layer;
     }
 
@@ -857,7 +854,6 @@ static path_result json_path_get_impl(json_t *root, path_result curr, const char
   name_end = name_begin + (pname_end - pname);
 
   result = json_path_get_property_col(root, curr, name_begin, name_end);
-  debug_out(result.result);
   DELETE_ARRAY(name_begin);
   path_result ret = json_path_get_impl(root, result, path, end);
   json_decref(result.result);
