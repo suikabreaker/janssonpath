@@ -290,6 +290,30 @@ static path_result json_path_get_property(json_t *curr, const char *begin, const
     result.result = json_path_get_all_properties(curr);
     return result;
   }
+  else if (begin[0] == '.')
+  {
+    if (begin[1] && begin + 1 != end)
+      fail();
+    result.result = json_array();
+    result.is_collection = TRUE;
+    path_result out_layer = {json_array(), TRUE};
+    json_array_append(out_layer.result, curr);
+
+    while (out_layer.result &&
+           !(json_is_array(out_layer.result) && !json_array_size(out_layer.result)))
+    {
+      debug_out(out_layer.result);
+      path_result cur_layer = json_path_get_all_properties_col(out_layer);
+      debug_out(cur_layer.result);
+      json_decref(out_layer.result);
+      json_array_extend(result.result, cur_layer.result);
+      debug_out(result.result);
+      out_layer = cur_layer;
+    }
+
+    json_decref(out_layer.result);
+    return result;
+  }
   else if (begin[0] == '#')
   {
     if (begin[1] && begin + 1 != end)
@@ -696,6 +720,7 @@ static path_result json_path_get_property_col(json_t *root, path_result curr,
   path_result result = {NULL, FALSE};
   size_t index;
   json_t *iter;
+
   int cond = (name[0] == '?');
   if (name[0] == '(' || (cond && name[1] == '('))
   { //expression [?(..)] [(..)]
@@ -789,14 +814,10 @@ static path_result json_path_get_impl(json_t *root, path_result curr, const char
   }
   path_result result = {NULL, FALSE};
 
-  int recursive = FALSE;
-
-  int correct_grammar = (path[0] == '.' || path[0] == '[');
-  if (!correct_grammar)
+  if (!(path[0] == '.' || path[0] == '['))
     fail();
 
-  recursive = (path[0] == '.' && path[1] == '.'); //.. recursive search of property
-  const char *pname = path + (recursive ? 2 : 1);
+  const char *pname = path + 1;
   const char *pname_end;
   // got the full property name
   if (path[0] == '[')
@@ -805,6 +826,11 @@ static path_result json_path_get_impl(json_t *root, path_result curr, const char
     if (pname_end[0] != ']')
       fail();
     path = pname_end + 1;
+  }
+  else if (path[1] == '.')
+  {
+    pname_end = path + 2;
+    path = pname_end;
   }
   else
   {
@@ -828,33 +854,8 @@ static path_result json_path_get_impl(json_t *root, path_result curr, const char
   }
   name_end = name_begin + (pname_end - pname);
 
-  if (recursive)
-  {
-    //dumb C does not allow to assign struct directly
-    path_result new_result = {json_array(), TRUE};
-    result = new_result;
-
-    path_result out_layer = {json_array(), TRUE};
-    json_array_append(out_layer.result, curr.result);
-
-    while (out_layer.result &&
-           !(json_is_array(out_layer.result) && !json_array_size(out_layer.result)))
-    {
-      path_result cur_layer = json_path_get_all_properties_col(out_layer);
-      json_decref(out_layer.result);
-      path_result selected =
-          json_path_get_property_col(root, cur_layer, name_begin, name_end);
-      json_array_extend(result.result, selected.result);
-      json_decref(selected.result);
-      out_layer = cur_layer;
-    }
-
-    json_decref(out_layer.result);
-  }
-  else
-  {
-    result = json_path_get_property_col(root, curr, name_begin, name_end);
-  }
+  result = json_path_get_property_col(root, curr, name_begin, name_end);
+  debug_out(result.result);
   DELETE_ARRAY(name_begin);
   path_result ret = json_path_get_impl(root, result, path, end);
   json_decref(result.result);
