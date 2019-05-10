@@ -309,7 +309,6 @@ static path_result json_path_get_property(json_t *curr, const char *begin, const
   const char *seg[4];
   seg[0] = begin;
   size_t segn = 1; //number of parameters seprated by ':'
-  printf("%p:%p\n", begin, end);
   while (segn < 4 && seg[segn - 1] != end && seg[segn - 1][0])
   {
     seg[segn] = jassonpath_next_seprator(seg[segn - 1], end, ':');
