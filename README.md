@@ -30,13 +30,14 @@ Use `"` to enclosing strings. Space characters not allowed except in string lite
 | `$`                      |                                                             The root object or array. In out most path it can be omited                                                             |
 | `.property`              |                                                                               Same as `["property"]`                                                                                |
 | `["property"]`           |                                          Selects the specified property in a parent object. When property is integer n, it's alias of [n]                                           |
-| `[n]`                    |                              Selects the *n*-th element from an array. Indexes are 0-based. Note that objects will always return empty lists for this.                              |
-| `..property`             |                 Recursive descent: Searches for the specified property name recursively and returns an array of all values with this property name. Returns a list.                 |
+| `[n]`                    |                              Selects the n-th element from an array. Indexes are 0-based. Note that objects will always return empty lists for this.                              |
+| `..`             |                 Recursive: all descendant node.                 |
 | `*`                      |                                                Selects all elements in an object or an array, regardless of their names or indexes.                                                 |
 | `#`                      |                                                      Length of the array.                                                       |
 | `[start:end]` `[start:]` | Selects array elements from the start index and up to, but not including, end index. If end is omitted, selects all elements from start until the end of the array. Returns a list. |
-| `[:n]`                   |                                                            Selects the first *n* elements of the array. Returns a list.                                                             |
-| `[-n:]`                  |                                                             Selects the last *n* elements of the array. Returns a list.                                                             |
+| `[:n]`                   |                                                            Selects the first n elements of the array. Returns a list.                                                             |
+| `[-n:]`                  |                                                             Selects the last n elements of the array. Returns a list.                                                             |
+| `[-n]`                  |                                                             Selects the n-th elements counted from last of the array. Returns a list.                                                             |
 | `[?(expression)]`        |                                Filter expression. Selects all elements in an object or array that filter expression is true for it. Returns a list.                                 |
 | `[(expression)]`         |                                                 Script expression. Expression is evaluated as property names or indexes to select.                                                  |
 | `@`                      |                                                      Used in filter expressions to refer to the current node being processed.                                                       |

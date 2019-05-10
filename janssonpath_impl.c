@@ -372,11 +372,16 @@ static path_result json_path_get_property(json_t *curr, const char *begin, const
     free((void *)pname);
   }
   else if (segn == 1 && seg_filled[0])
-  { //[i]
+  { //[i] and [-i]
     result.is_collection = FALSE;
     if (!json_is_array(curr) || !seg_filled[0])
       fail();
-    result.result = json_incref(json_array_get(curr, seg_int[0]));
+    size_t index;
+    if (seg_int[0] >= 0 && seg[0][0] != '-')
+      index = seg_int[0];
+    else
+      index = json_array_size(curr) - (-seg_int[0] + 1);
+    result.result = json_incref(json_array_get(curr, index));
   }
   else
   { //[i:j]([:j] [i:]) or [i:j:k] or [-i:]
