@@ -1,5 +1,5 @@
-# janssonpath
-jsonpath implementation for jansson
+# Janssonpath
+Jsonpath implementation for [jansson](http://www.digip.org/jansson/)([Github](https://github.com/akheron/jansson))
 
 ## How to build
 
