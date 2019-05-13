@@ -27,9 +27,9 @@ Use `"` to enclosing strings. Space characters not allowed except in string lite
 
 | Expression               |                                                                                     Description                                                                                     |
 | ------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| `$`                      |                                                             The root object or array. In out most path it can be omited                                                             |
-| `.property`              |                                                                               Same as `["property"]`                                                                                |
-| `["property"]`           |                                          Selects the specified property in a parent object. When property is integer n, it's alias of [n]                                           |
+| `$`                      |                                                             The root object or array. In out most path it can be omited.                                                             |
+| `.property`              |                                                                               Same as `["property"]`.                                                                                |
+| `["property"]`           |                                          Selects the specified property in a parent object. When property is integer n, it's alias of [n].                                           |
 | `[n]`                    |                              Selects the n-th element from an array. Indexes are 0-based. Note that objects will always return empty lists for this.                              |
 | `..`             |                 Recursive: all descendant node.                 |
 | `*`                      |                                                Selects all elements in an object or an array, regardless of their names or indexes.                                                 |
@@ -48,7 +48,7 @@ List are represented in json array. To distinct between list and array node, use
 
 instead.
 
-When a selection returns list is invalid, it returns an empty list; When a selection returns node is invalid it returns NULL.
+When a selection returns invalid list, it returns an empty list; When a selection returns invalid node is it returns NULL.
 
 ### Expression
 
@@ -63,7 +63,7 @@ When a selection returns list is invalid, it returns an empty list; When a selec
 | `=~`     | Match a regular expression. Yet not supported. |
 | `!`      | Negate an expression.                          |
 | `&&`     | Logical AND.                                   |
-| `||`   | Logical OR.                                    |
+| `\|\|`   | Logical OR.                                    |
 
 Expressions are evaluated as json nodes.
 
