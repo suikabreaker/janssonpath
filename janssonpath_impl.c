@@ -470,6 +470,7 @@ static const char *unescape(const char *begin, const char *end) {
             } break;
             default:
                 *iter = maped;
+                ++src_iter;
             }
         }
     }
