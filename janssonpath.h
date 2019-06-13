@@ -8,8 +8,8 @@
 // note distinct shuld be made dealing with intermidiate result
 // so use path_result instead of json_t*
 typedef struct path_result {
-  json_t *result;
-  int is_collection;
+    json_t *result;
+    int is_collection;
 } path_result;
 
 json_t *json_path_get(json_t *json, const char *path);
